@@ -40,12 +40,24 @@ yarn-error.log*
 .DS_Store
 
 
-# Input & Output files
-desktop/input/
+# Local inputs and results; only clean starter templates belong in Git.
+desktop/input/*
 !desktop/input/.gitkeep
-desktop/input/bigpopa.db
-desktop/input/StartingPointTable.xlsx
-desktop/input/*.db-journal
-desktop/input/~$StartingPointTable.xlsx
-desktop/output/
-!desktop/ouput/.gitkeep
+!desktop/input/template/
+desktop/input/template/*
+!desktop/input/template/StartingPointTable_clean.xlsx
+!desktop/input/template/bigpopa_clean.db
+desktop/output/*
+!desktop/output/.gitkeep
+release/
+
+# Local configuration, credentials, and development artifacts
+.env
+.env.*
+!.env.example
+.venv/
+.pytest_cache/
+*.log
+*.tmp
+*.bak
+settings.json
