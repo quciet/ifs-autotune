@@ -8,7 +8,7 @@ All core work happens on the local machine. The main runtime record is `bigpopa.
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/quciet/ifs_autotune.git ifs-autotune
+git clone https://github.com/quciet/ifs-autotune.git ifs-autotune
 cd ifs-autotune
 ```
 
