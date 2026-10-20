@@ -2453,7 +2453,7 @@ function TuneIFsPage({
 }
 
 function App() {
-  const [ifsFolderPath, setIfsFolderPath] = useState<string | null>(null);
+  const [ifsFolderPath, setIfsFolderPath] = useState<string | null>((window as Window & {ifsCompanionInstallation?: string}).ifsCompanionInstallation || null);
   const [lastValidatedIfsFolder, setLastValidatedIfsFolder] =
     useState<string | null>(null);
   const [outputDirectory, setOutputDirectory] = useState<string | null>(null);
@@ -2477,6 +2477,21 @@ function App() {
       typeof window !== "undefined" && Boolean(window.electron?.selectFolder),
     );
   const mlJobStatusPollIntervalMs = 3000;
+  useEffect(() => {
+    const host = window as typeof window & {companionSession?: {canGoBack:()=>boolean;back:()=>void;stop:()=>Promise<void>}};
+    host.companionSession = {
+      canGoBack: () => view !== "validate",
+      back: () => {setView(view === "ml" ? "setup" : "validate");setProfileEditorOpen(false);},
+      stop: async () => {
+        await window.electron!.invoke("companion:stop", {});
+        await refreshMLJobStatus();
+        setLoading(false);setView("validate");setProfileEditorOpen(false);
+      }
+    };
+    if(parent!==window)parent.postMessage({type:'tool-navigation'},location.origin);
+    return () => {delete host.companionSession;};
+  }, [view]);
+
 
   const refreshMLJobStatus = async () => {
     if (typeof window === "undefined") {
@@ -3048,9 +3063,8 @@ function App() {
         </>
       )}
 
-      {(view === "setup" || view === "ml") &&
-      (result?.valid || mlJobStatus?.running || mlJobStatus?.ifsValidated) ? (
-        <>
+      {(result?.valid || mlJobStatus?.running || mlJobStatus?.ifsValidated) ? (
+        <div style={{display:view === "validate" ? "none" : undefined}}>
           {view === "setup" ? (
             <InputProfilesPanel
               key="profiles"
@@ -3066,7 +3080,7 @@ function App() {
           {(view === "ml" || !profileEditorOpen) ? (
             <TuneIFsPage
               key="workflow"
-              pageMode={view === "setup" ? "setup" : "ml"}
+              pageMode={view === "ml" ? "ml" : "setup"}
               onBackToValidation={() => {
                 setView("validate");
                 setProfileEditorOpen(false);
@@ -3102,7 +3116,7 @@ function App() {
               initialTerminationReason={mlJobStatus?.terminationReason ?? null}
             />
           ) : null}
-        </>
+        </div>
       ) : null}
 
       {(view === "setup" || view === "ml") &&

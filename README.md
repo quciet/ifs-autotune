@@ -131,3 +131,30 @@ BIGPOPA turns an IFs installation plus a workbook configuration into a repeatabl
   Confirm that `frontend\package.json` exists and that `npm install` completed successfully.
 - Validation fails even with a valid IFs folder
   Check that `backend\tools\ParquetReaderlite.exe` is present. The Electron validation path also treats that helper as required.
+
+## Optional IFsCompanion tool
+
+The autotune UI can run inside Companion's right panel while keeping its existing
+Electron handlers and Python backend. Coworkers install the `.ifstool` file using
+Companion > Settings > Manage tools > Install from file. No Python or Node setup
+is required on their machines. Updates and uninstall preserve their saved work.
+
+On the Windows build machine, install the existing frontend/desktop npm dependencies
+and backend Python dependencies, then run:
+
+```powershell
+backend/.venv/Scripts/python.exe scripts/build-tool.py --python backend/.venv/Scripts/python.exe
+```
+
+The builder packages Electron, the frontend, backend source, clean templates,
+and uses Companion 0.3.0 or later for the shared Python runtime and libraries. Keep
+the ifs-companion repository beside this repository (or set IFS_COMPANION_PATH).
+Missing libraries download automatically on installation, including file installs.
+The builder writes the package, checksum, and release metadata to ignored release/.
+Use --standalone explicitly to build the legacy self-contained format. Local
+inputs, outputs, credentials, and Python bytecode caches are excluded.
+
+In Companion mode, user data is stored in the persistent folder supplied by
+Companion, and the shared IFs installation is prefilled. Standalone desktop use
+continues to work; new default output folders use Electron's user-data directory.
+Existing user-selected output folders are not moved or removed.

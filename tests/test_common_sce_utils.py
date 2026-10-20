@@ -1,4 +1,4 @@
-from backend.common_sce_utils import parse_dimension_flag
+from backend.ifs.common_sce_utils import parse_dimension_flag
 
 
 def test_parse_dimension_flag_text_variants() -> None:

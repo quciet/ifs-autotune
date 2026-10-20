@@ -3,9 +3,21 @@ const { spawn } = require("child_process");
 const path = require('node:path');
 const fs = require('fs');
 
+const companionMode = process.env.IFS_COMPANION_MODE === '1';
+const bridge = companionMode ? require('./companion-host').createBridge(ipcMain) : null;
+const childProcesses = new Set();
+let companionStopping = false;
+if (companionMode) app.setPath('userData', path.join(process.env.IFS_TOOL_DATA_DIR, 'browser'));
 const isDev = !app.isPackaged;
+app.on('before-quit', () => {
+  for (const child of childProcesses) {
+    if (process.platform === 'win32') {
+      try { require('child_process').execFileSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {windowsHide:true,stdio:'ignore'}); } catch { }
+    } else child.kill();
+  }
+});
 const STATIC_IFS_ARGS = ['-1', 'true', 'true', '1', 'false'];
-const DEFAULT_OUTPUT_DIR = () => path.join(app.getAppPath(), 'output');
+const DEFAULT_OUTPUT_DIR = () => path.join(process.env.IFS_TOOL_DATA_DIR || app.getPath('userData'), 'output');
 
 const ensureDirectoryExists = (dirPath) => {
   if (!fs.existsSync(dirPath)) {
@@ -138,7 +150,8 @@ const sendToRenderer = (channel, payload) => {
     return;
   }
 
-  mainWindow.webContents.send(channel, payload);
+  if (bridge) bridge.emit(channel, payload);
+  else mainWindow.webContents.send(channel, payload);
 };
 
 let currentMLProcess = null;
@@ -232,6 +245,7 @@ const buildMLDriverResolvePayload = ({ code, parsedPayload, fallbackBaseYear, fa
 
 function createWindow() {
   mainWindow = new BrowserWindow({
+    show: !companionMode,
     width: 1200,
     height: 800,
     minWidth: 960,
@@ -245,14 +259,17 @@ function createWindow() {
 
   mainWindow.setResizable(true);
   mainWindow.on('resize', () => {
-    mainWindow.webContents.send('window-resized');
+    sendToRenderer('window-resized');
   });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 
-  if (isDev) {
+  if (companionMode) {
+    bridge.start({directory: path.join(__dirname, 'frontend', 'dist'),
+      busy: () => mlJobState.running || childProcesses.size > 0, quit: () => app.quit()});
+  } else if (isDev) {
     const devServerURL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
     mainWindow.loadURL(devServerURL);
   } else {
@@ -550,6 +567,14 @@ const getBackendDir = () => path.join(getRepoRoot(), 'backend');
 
 // Always run backend scripts with backend/.venv so Electron uses consistent, required dependencies.
 function getVenvPython() {
+  if (process.env.IFS_COMPANION_MODE === '1' && process.env.IFS_COMPANION_PYTHON) {
+    return process.env.IFS_COMPANION_PYTHON;
+  }
+  if (app.isPackaged) {
+    const bundled = path.join(getRepoRoot(), 'python', 'python.exe');
+    if (!fs.existsSync(bundled)) throw new Error('The tool runtime is missing. Reinstall IFs Autotune.');
+    return bundled;
+  }
   const venvPython =
     process.platform === 'win32'
       ? path.join(getBackendDir(), '.venv', 'Scripts', 'python.exe')
@@ -569,12 +594,17 @@ function getVenvPython() {
 }
 
 function spawnPython(args, options = {}) {
+  if(companionStopping)throw new Error("The current session is stopping. Try again when it has stopped.");
   const pythonExe = getVenvPython();
   const quiet = options && typeof options === 'object' ? options.quiet === true : false;
   if (!quiet) {
     console.log(`[py] using: ${pythonExe}`);
   }
-  return spawn(pythonExe, args, options);
+  const child = spawn(pythonExe, args, {...options, env: {...process.env, ...options.env, PYTHONPATH: [getBackendDir(), process.env.IFS_COMPANION_MODE === '1' ? process.env.PYTHONPATH : ''].filter(Boolean).join(path.delimiter), PYTHONNOUSERSITE: '1', PYTHONDONTWRITEBYTECODE: '1'}});
+  childProcesses.add(child);
+  child.once('close', () => childProcesses.delete(child));
+  child.once('error', () => childProcesses.delete(child));
+  return child;
 }
 
 function runPythonScript(scriptName, args = [], options = {}) {
@@ -619,7 +649,7 @@ function runPythonScript(scriptName, args = [], options = {}) {
         return;
       }
 
-      window.webContents.send(progressChannel, normalized);
+      sendToRenderer(progressChannel, normalized);
     };
 
     const emitRunIFsProgress = (line) => {
@@ -636,7 +666,7 @@ function runPythonScript(scriptName, args = [], options = {}) {
       if (yearMatch) {
         const year = Number.parseInt(yearMatch[1], 10);
         if (Number.isFinite(year)) {
-          window.webContents.send('ifs-progress', { year });
+          sendToRenderer('ifs-progress', { year });
         }
       }
 
@@ -687,7 +717,7 @@ function runPythonScript(scriptName, args = [], options = {}) {
       stdoutBuffer += text;
 
       if (isMlDriver && window && !window.isDestroyed()) {
-        window.webContents.send('ml-progress', text);
+        sendToRenderer('ml-progress', text);
       }
 
       const lines = stdoutBuffer.split(/\r?\n/);
@@ -1122,7 +1152,7 @@ function launchIFsRun(payload) {
 
       const progressPayload =
         resolvedPercent != null ? { year, percent: resolvedPercent } : { year };
-      mainWindow.webContents.send('ifs-progress', progressPayload);
+      sendToRenderer('ifs-progress', progressPayload);
     };
 
     const handleStdoutLine = (line) => {
@@ -1474,6 +1504,23 @@ ipcMain.handle("run-ml", async (_event, args) => {
       rejectOnce(err);
     }
   });
+});
+ipcMain.handle('companion:stop', async () => {
+  if(companionStopping)throw new Error('The session is already stopping.');
+  companionStopping=true;
+  try {
+  const children=[...childProcesses].filter(child=>child.exitCode===null&&child.signalCode===null);
+  await Promise.all(children.map(child=>new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>reject(new Error('A worker did not stop. Please wait and retry.')),15000);
+    child.once('close',()=>{clearTimeout(timer);resolve();});
+    if(process.platform==='win32'){
+      require('child_process').execFile('taskkill',['/pid',String(child.pid),'/T','/F'],{windowsHide:true},error=>{
+        if(error&&child.exitCode===null&&child.signalCode===null){clearTimeout(timer);reject(error);}
+      });
+    }else child.kill('SIGTERM');
+  })));
+  return {ok:true};
+  } finally {companionStopping=false;}
 });
 ipcMain.handle('ml:requestStop', async () => {
   if (!mlJobState.running || !currentMLProcess || !currentMLStopFile) {

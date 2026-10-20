@@ -868,7 +868,9 @@ def test_log_clipped_target_transform_limits_fail_penalty_in_training_space() ->
     assert transformed[1] > transformed[0]
 
 
-def test_bootstrap_ensemble_adds_uncertainty_for_tree_surrogate() -> None:
+def test_bootstrap_ensemble_adds_uncertainty_for_tree_surrogate(monkeypatch) -> None:
+    # Reproducible draws avoid chance-identical predictions from four tiny samples.
+    monkeypatch.setattr(np.random, "randint", np.random.RandomState(0).randint)
     x_obs = np.asarray([[0.0], [1.0], [2.0], [3.0]], dtype=float)
     y_obs = np.asarray([0.0, 1.0, 4.0, 9.0], dtype=float)
     x_grid = np.asarray([[1.5], [2.5]], dtype=float)

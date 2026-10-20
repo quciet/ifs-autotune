@@ -21,7 +21,8 @@ def ensure_working_db() -> Dict[str, object] | None:
     Ensure desktop/input/bigpopa.db exists. If missing, clone template.
     """
     template = Path("desktop/input/template/bigpopa_clean.db")
-    working = Path("desktop/output/bigpopa.db")
+    working = (Path(os.environ["IFS_TOOL_DATA_DIR"]) / "output" / "bigpopa.db"
+               if os.environ.get("IFS_TOOL_DATA_DIR") else Path("desktop/output/bigpopa.db"))
 
     created = False
     if not working.exists():

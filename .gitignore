@@ -61,3 +61,5 @@ release/
 *.tmp
 *.bak
 settings.json
+
+build/
