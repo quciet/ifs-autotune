@@ -6,7 +6,7 @@ import sys
 import shutil
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 from db.ifs_metadata import ensure_static_metadata
 from db.input_profiles import validate_profile

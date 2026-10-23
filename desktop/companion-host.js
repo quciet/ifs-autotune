@@ -19,6 +19,23 @@ function createBridge(ipcMain) {
     start({directory, busy, quit}) {
       const token = process.env.IFS_TOOL_TOKEN;
       if (!token || !process.env.IFS_TOOL_READY_FILE) throw Error('Missing Companion launch configuration.');
+      let reservation=null, acquiring=false, inFlight=0, releasing=false;
+      const executionChannels=new Set(['run-ifs','run_ifs','run-ml','model_setup']);
+      async function execution(action, payload){
+        if(!process.env.IFS_EXECUTION_URL)throw Error('Update Companion before running IFs from this tool.');
+        const response=await fetch(process.env.IFS_EXECUTION_URL+'/'+action,{method:'POST',
+          headers:{'Content-Type':'application/json','X-IFs-Execution-Token':process.env.IFS_EXECUTION_TOKEN},body:JSON.stringify(payload)});
+        const data=await response.json();if(!response.ok)throw Error(data.error||'IFs execution reservation failed.');return data;
+      }
+      async function releaseIfIdle(){
+        if(!reservation||inFlight||busy()||releasing)return;
+        releasing=true;
+        try{await execution('release',{lease:reservation.lease});reservation=null;}
+        catch(error){console.error('Could not release IFs reservation:',error.message);}
+        finally{releasing=false;}
+      }
+      const reservationWatch=setInterval(()=>releaseIfIdle(),1000);
+      reservationWatch.unref();
       const send = (res, status, value, type='application/json') => {
         res.writeHead(status, {'Content-Type': type, 'Cache-Control': 'no-store'});
         res.end(type==='application/json' ? JSON.stringify(value) : value);
@@ -44,7 +61,15 @@ function createBridge(ipcMain) {
             if(channel==='app:quit') return send(res,200,{ok:false,message:'Close this tool from Companion’s Manage tools screen.'});
             const handler=handlers.get(channel);
             if(!handler || channel==='debug:pythonPath') return send(res,404,{error:'Unknown tool action.'});
-            const result=await handler({},data);
+            let result;
+            if(executionChannels.has(channel)){
+              if(acquiring||releasing||inFlight||reservation)throw Error('An IFs operation is already active. Wait for it to finish.');
+              acquiring=true;
+              try{reservation=await execution('acquire',{});}finally{acquiring=false;}
+              inFlight++;
+              try{result=await handler({},data);}
+              finally{inFlight--;await releaseIfIdle();}
+            }else result=await handler({},data);
             return send(res,200,result===undefined?null:result);
           }
           if(req.method!=='GET') return send(res,405,{error:'Unsupported request.'});

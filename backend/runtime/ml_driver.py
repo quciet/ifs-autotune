@@ -41,10 +41,7 @@ from runtime.model_status import (
     FIT_EVALUATED,
     IFS_RUN_STARTED,
     IFS_RUN_FAILED,
-    IFS_RUN_COMPLETED,
-    MODEL_REUSED,
     cached_result_status,
-    visible_fit_pooled,
 )
 from runtime.model_setup import (
     canonical_config,
@@ -148,7 +145,6 @@ def emit_stage_response(status: str, stage: str, message: str, data: Dict[str, o
     }
     print(json.dumps(payload))
     sys.stdout.flush()
-
 
 
 def stop_requested(stop_file: Path | None) -> bool:
@@ -547,11 +543,6 @@ def _fetch_model_output_snapshot(
     return status, fit_pooled
 
 
-def _repair_model_output_batch_indexes(conn: sqlite3.Connection) -> int:
-    del conn
-    return 0
-
-
 def _normalize_model_output_batch_indexes(conn: sqlite3.Connection) -> int:
     """Commit batch-index normalization before other connections begin writing."""
 
@@ -572,27 +563,6 @@ def _load_model_by_id(
         definition.output_set,
         definition.dataset_id,
     )
-
-
-def _load_persisted_ml_method(conn: sqlite3.Connection, ifs_id: int):
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT ml_method FROM ifs_version WHERE ifs_id = ? LIMIT 1",
-        (ifs_id,),
-    )
-    row = cursor.fetchone()
-    if not row or row[0] is None:
-        raise ValueError(
-            "bigpopa.db is missing ifs_version.ml_method for the selected model. "
-            "Please rerun model setup."
-        )
-    try:
-        return normalize_ml_method(row[0])
-    except ValueError as exc:
-        raise ValueError(
-            "bigpopa.db contains an invalid ifs_version.ml_method for the selected model. "
-            "Please rerun model setup."
-        ) from exc
 
 
 def _get_ifs_static_id(conn: sqlite3.Connection, ifs_id: int) -> Tuple[int | None, int | None]:

@@ -7,13 +7,6 @@ from .ensemble_training import ensemble_predict, train_ensemble
 from .surrogate_models import BoundsScaler, LogClippedTargetTransform
 
 
-def _format_candidate(x: np.ndarray) -> str:
-    arr = np.atleast_1d(np.asarray(x, dtype=float))
-    if arr.size == 1:
-        return f"{arr.item():.4f}"
-    return np.array2string(arr, precision=4, separator=", ")
-
-
 def format_percent_adaptive(pct: float | None) -> str:
     """
     Format percent values adaptively to avoid misleading rounding like 0.00%.

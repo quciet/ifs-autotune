@@ -259,25 +259,6 @@ def _legacy_column_expr(available_columns: set[str], alias: str, column_name: st
     return "NULL"
 
 
-def _definition_only_input_count(cursor: sqlite3.Cursor) -> int:
-    if not table_exists(cursor, LEGACY_TABLE_MODEL_INPUT):
-        return 0
-    if not table_exists(cursor, MODEL_RUN_TABLE):
-        return 0
-    row = cursor.execute(
-        f"""
-        SELECT COUNT(*)
-        FROM {LEGACY_TABLE_MODEL_INPUT} mi
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM {MODEL_RUN_TABLE} mr
-            WHERE mr.model_id = mi.model_id
-        )
-        """
-    ).fetchone()
-    return int(row[0]) if row and row[0] is not None else 0
-
-
 def is_legacy_bigpopa_db(conn: sqlite3.Connection) -> bool:
     cursor = conn.cursor()
     if any(table_exists(cursor, table_name) for table_name in LEGACY_TABLES):

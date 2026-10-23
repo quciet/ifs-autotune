@@ -12,7 +12,6 @@ import argparse
 import copy
 import hashlib
 import json
-import os
 import sqlite3
 import sys
 import subprocess
@@ -30,17 +29,14 @@ from runtime.artifact_retention import (
 
 from db.ifs_metadata import log_version_metadata
 from db.input_profiles import resolve_profile
-from runtime.ml_method import MLMethodConfig
 from runtime.model_run_store import (
     ModelDefinition,
-    fetch_latest_result_for_model,
     upsert_seed_model_run,
 )
 from db.schema import (
     ensure_current_bigpopa_schema,
     ensure_ml_resume_state_table as ensure_unified_ml_resume_state_table,
 )
-from ifs.common_sce_utils import build_custom_parts, parse_dimension_flag
 
 
 def _round_numbers(obj: Any, places: int = 6) -> Any:
@@ -74,45 +70,8 @@ def ensure_bigpopa_schema(cursor: sqlite3.Cursor) -> None:
     ensure_current_bigpopa_schema(cursor)
 
 
-def ensure_model_output_tracking_columns(cursor: sqlite3.Cursor) -> None:
-    del cursor
-
-
-def ensure_ml_proposal_history_table(cursor: sqlite3.Cursor) -> None:
-    del cursor
-
-
 def ensure_ml_resume_state_table(cursor: sqlite3.Cursor) -> None:
     ensure_unified_ml_resume_state_table(cursor)
-
-
-def _fetch_model_result_snapshot(
-    conn: sqlite3.Connection,
-    *,
-    model_id: str,
-) -> tuple[str | None, str | None, float | None, str | None]:
-    row = conn.execute(
-        """
-        SELECT model_status, fit_var, fit_pooled, completed_at_utc
-        FROM model_run
-        WHERE model_id = ?
-        ORDER BY
-            CASE WHEN completed_at_utc IS NULL THEN 1 ELSE 0 END,
-            completed_at_utc DESC,
-            run_id DESC
-        LIMIT 1
-        """,
-        (model_id,),
-    ).fetchone()
-    if row is None:
-        status, fit_pooled, fit_var = fetch_latest_result_for_model(conn, model_id=model_id)
-        return status, fit_var, fit_pooled, None
-    return (
-        row[0] if isinstance(row[0], str) or row[0] is None else str(row[0]),
-        row[1] if isinstance(row[1], str) or row[1] is None else str(row[1]),
-        float(row[2]) if row[2] is not None else None,
-        row[3] if isinstance(row[3], str) or row[3] is None else str(row[3]),
-    )
 
 
 def build_input_param_from_defaults(

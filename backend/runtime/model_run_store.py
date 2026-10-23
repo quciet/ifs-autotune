@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from runtime.model_status import MODEL_REUSED, fit_is_missing, visible_fit_pooled
+from runtime.model_status import fit_is_missing, visible_fit_pooled
 from db.schema import MODEL_RUN_TABLE, ensure_current_bigpopa_schema
 
 LEGACY_SOURCE_MODEL_INPUT = "model_input"

@@ -109,14 +109,6 @@ def validate_surrogate_memory(
             )
 
 
-def _fit_polynomial(X: np.ndarray, Y: np.ndarray, degree: int) -> PolynomialSurrogate:
-    X = np.atleast_2d(np.asarray(X, dtype=float))
-    Y = np.asarray(Y, dtype=float)
-    if len(X) < 2:
-        return PolynomialSurrogate.fit(X, Y, degree=0)
-    return PolynomialSurrogate.fit(X, Y, degree=degree)
-
-
 def train_ensemble(
     X_obs,
     Y_obs,
